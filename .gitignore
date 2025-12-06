@@ -1,0 +1,4 @@
+*_exec
+*.so
+*.bc
+*.bc.log
