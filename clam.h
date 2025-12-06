@@ -10,7 +10,7 @@ extern "C" {
 #endif
 
 #define NONDET_FN_ATTR __attribute__((visibility("default")))
-#define VERIFIER_FN_ATTR __attribute__((visibility("default")))
+#define VERIFIER_FN_ATTR __attribute__((visibility("hidden")))
 
 /**
  * Crab verifier functions
