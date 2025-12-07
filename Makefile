@@ -26,9 +26,9 @@ TARGET_CLAM=$(SRCS:%.c=%_clam.so)
 RUNTIME=runtime.c
 STUBS=stubs.c
 
-LOADER=../fixed_loader/target/release/fixed_loader
+LOADER=./loader/target/release/fixed_loader
 
-.PHONY: all clean run pass
+.PHONY: all clean run pass loader
 
 all: pass $(TARGET_EXEC) $(TARGET_LIB) $(TARGET_CLAM)
 
@@ -112,7 +112,10 @@ $(DIR)/%_clam.so: $(DIR)/%_clam_optimized.bc
 	$(CLANG) -O3 $(CFLAGS) $(LDFLAGS) $< -o $@
 
 # Helper scripts
-run: all
+loader:
+	cd loader && cargo build --release
+
+run: all loader
 	@echo "--- Running Executables ---"
 	@for prog in $(TARGET_EXEC); do \
 		echo "Running ./$$prog"; \
