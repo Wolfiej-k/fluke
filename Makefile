@@ -6,7 +6,7 @@ CFLAGS=-fPIC -Wall -Wextra
 LDFLAGS=-shared -Wl,-z,now
 
 CLAM=../clam/py/clam.py
-CLAM_FLAGS=--crab-track=mem --crab-dom=zones --crab-check=assert --crab-opt=dce --crab-promote-assume --inline
+CLAM_FLAGS=--crab-track=mem --crab-dom=int --crab-check=assert --crab-opt=dce --crab-promote-assume --crab-inter
 
 PASS_NAME=bounds-check
 PASS_PLUGIN=bounds_check.so
@@ -29,9 +29,11 @@ STUBS=stubs.c
 LOADER=../fixed_loader/target/release/fixed_loader
 
 .PHONY: all clean run pass
-.SECONDARY:
 
 all: pass $(TARGET_EXEC) $(TARGET_LIB) $(TARGET_CLAM)
+
+%: $(DIR)/%.c
+	@$(MAKE) $(DIR)/$*_exec $(DIR)/$*_lib.so $(DIR)/$*_clam.so
 
 # Build the LLVM plugins
 pass: $(PASS_PLUGIN) $(PATCH_PLUGIN)
@@ -90,11 +92,8 @@ $(DIR)/%_lib.so: $(DIR)/%_lib_optimized.bc
 
 # Run clam on linked bitcode
 $(DIR)/%_clam.bc: $(DIR)/%_linked.bc
-	$(CLAM) $(CLAM_FLAGS) $< -o $@ > $@.log
-	@WARN=$$(grep 'Number of total warning checks' $@.log); \
-	if [ -n "$$WARN" ]; then \
-	    echo "FLUKE WARNING: $$WARN"; \
-	fi
+	$(CLAM) $(CLAM_FLAGS) $< -o $@ > $@.log 2>&1
+	@./print_failures.sh $@.log
 
 # Replace crab intrinsics with stubs
 $(DIR)/%_clam_stubbed.bc: $(DIR)/%_clam.bc $(STUBS:.c=.bc)
