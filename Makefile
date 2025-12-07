@@ -5,7 +5,7 @@ LINK=llvm-link-14
 CFLAGS=-fPIC -Wall -Wextra
 LDFLAGS=-shared -Wl,-z,now
 
-CLAM=../clam/py/clam.py
+CLAM=clam/py/clam.py
 CLAM_FLAGS=--crab-track=mem --crab-dom=int --crab-check=assert --crab-opt=dce --crab-promote-assume --crab-inter
 
 PASS_NAME=bounds-check
@@ -29,6 +29,7 @@ STUBS=stubs.c
 LOADER=./loader/target/release/fixed_loader
 
 .PHONY: all clean run pass loader clam
+.SECONDARY:
 
 all: pass $(TARGET_EXEC) $(TARGET_LIB) $(TARGET_CLAM)
 
