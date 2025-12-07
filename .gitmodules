@@ -1,3 +1,6 @@
 [submodule "loader"]
 	path = loader
 	url = https://github.com/Wolfiej-k/rust-fixed-loader.git
+[submodule "clam"]
+	path = clam
+	url = https://github.com/seahorn/clam.git

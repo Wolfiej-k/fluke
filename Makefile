@@ -115,6 +115,9 @@ $(DIR)/%_clam.so: $(DIR)/%_clam_optimized.bc
 loader:
 	cd loader && cargo build --release
 
+clam:
+	./build_clam.sh
+
 run: all loader
 	@echo "--- Running Executables ---"
 	@for prog in $(TARGET_EXEC); do \
