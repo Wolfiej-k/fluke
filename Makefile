@@ -28,7 +28,7 @@ STUBS=stubs.c
 
 LOADER=./loader/target/release/fixed_loader
 
-.PHONY: all clean run pass loader
+.PHONY: all clean run pass loader clam
 
 all: pass $(TARGET_EXEC) $(TARGET_LIB) $(TARGET_CLAM)
 
@@ -118,7 +118,7 @@ loader:
 clam:
 	./build_clam.sh
 
-run: all loader
+run: all
 	@echo "--- Running Executables ---"
 	@for prog in $(TARGET_EXEC); do \
 		echo "Running ./$$prog"; \
