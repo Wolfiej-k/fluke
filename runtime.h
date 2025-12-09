@@ -2,12 +2,10 @@
 #define FLUKE_H
 
 #include "clam.h"
-#include <stdlib.h>
 
 extern const void *process_base;
 extern const void *process_limit;
 
-#define likely(x) __builtin_expect(!!(x), 1)
 #define unlikely(x) __builtin_expect(!!(x), 0)
 
 #define BOUNDS_FN_ATTR                                                         \

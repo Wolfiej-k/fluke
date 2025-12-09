@@ -20,6 +20,7 @@ public:
     if (EntryFn && !EntryFn->isDeclaration()) {
       EntryFn->setLinkage(GlobalValue::ExternalLinkage);
       EntryFn->setVisibility(GlobalValue::DefaultVisibility);
+      EntryFn->removeFnAttr(Attribute::OptimizeNone);
     }
 
     return PreservedAnalyses::none();

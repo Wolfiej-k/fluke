@@ -6,8 +6,8 @@ CFLAGS=-fPIC -Wall -Wextra
 LDFLAGS=-shared -Wl,-z,now
 
 CLAM=clam/py/clam.py
-CLAM_FLAGS=--crab-track=mem --crab-dom=int --crab-check=assert --crab-opt=dce \
-		   --crab-opt=add-invariants --crab-promote-assume --crab-inter \
+CLAM_FLAGS=--crab-track=mem --crab-dom=zones --crab-check=assert --crab-inter \
+		   --crab-promote-assume --crab-opt=dce --crab-opt=add-invariants \
 		   --crab-opt-invariants-loc=block-entry \
 		   --crab-opt-invariants-loc=loop-header \
 		   --crab-opt-invariants-loc=after-load
@@ -91,8 +91,12 @@ $(DIR)/%_inlined.bc: $(DIR)/%_linked.bc
 $(DIR)/%_lib_stubbed.bc: $(DIR)/%_inlined.bc $(STUBS:.c=.bc)
 	$(LINK) $^ -o $@
 
+# Run entry patch pass
+$(DIR)/%_lib_patched.bc: $(DIR)/%_lib_stubbed.bc $(PATCH_PLUGIN)
+	$(OPT) -load-pass-plugin=./$(PATCH_PLUGIN) -passes=$(PATCH_NAME) $< -o $@
+
 # Run another optimizer pass
-$(DIR)/%_lib_optimized.bc: $(DIR)/%_lib_stubbed.bc $(PATCH_PLUGIN)
+$(DIR)/%_lib_optimized.bc: $(DIR)/%_lib_patched.bc $(PATCH_PLUGIN)
 	$(OPT) -O3 $< -o $@
 
 # Generate shared object with bounds checks

@@ -137,7 +137,9 @@ private:
   static void instrumentPointer(IRBuilder<> &B, Value *Ptr, uint64_t Size,
                                 FunctionCallee &Fn) {
     LLVMContext &Ctx = B.getContext();
-    injectCall(B, Fn, Ptr, ConstantInt::get(Type::getInt64Ty(Ctx), Size));
+    if (Size > 0) {
+      injectCall(B, Fn, Ptr, ConstantInt::get(Type::getInt64Ty(Ctx), Size));
+    }
   }
 
   static void instrumentGlobalsAndFunctions(Module &M, IRBuilder<> &B,
@@ -149,8 +151,10 @@ private:
       if (G.getName().startswith("llvm."))
         continue;
       uint64_t Size = DL.getTypeAllocSize(G.getValueType());
-      injectCall(B, AssumeFn, &G,
-                 ConstantInt::get(Type::getInt64Ty(Ctx), Size));
+      if (Size > 0) {
+        injectCall(B, AssumeFn, &G,
+                   ConstantInt::get(Type::getInt64Ty(Ctx), Size));
+      }
     }
 
     for (Function &F : M) {

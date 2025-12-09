@@ -1,21 +1,19 @@
 #include "runtime.h"
 
 BOUNDS_FN_ATTR void __bounds_check(const void *ptr, long size) {
-  if (unlikely(size == 0)) {
-    return;
-  }
+  int base_ok = (long)process_base <= (long)ptr;
+  int limit_ok = (long)process_limit >= (long)ptr + size;
 
-  int above_base = (char *)process_base <= (char *)ptr;
-  int below_limit = (char *)process_limit >= (char *)ptr + size;
-  __CRAB_assert(above_base);
-  __CRAB_assert(below_limit);
+  __CRAB_assert(base_ok);
+  __CRAB_assert(limit_ok); 
 
-  if (unlikely(!above_base || !below_limit)) {
-    abort();
+  int ok = base_ok & limit_ok;
+  if (unlikely(!ok)) {
+    __builtin_trap();
   }
 }
 
 BOUNDS_FN_ATTR void __bounds_assume(const void *ptr, long size) {
-  __CRAB_assume((char *)process_base <= (char *)ptr);
-  __CRAB_assume((char *)process_limit >= (char *)ptr + size);
+  __CRAB_assume((long)process_base <= (long)ptr);
+  __CRAB_assume((long)process_limit >= (long)ptr + size);
 }
