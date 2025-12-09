@@ -110,7 +110,9 @@ $(DIR)/%_clam_stubbed.bc: $(DIR)/%_clam.bc $(STUBS:.c=.bc)
 
 # Run entry patch pass
 $(DIR)/%_clam_patched.bc: $(DIR)/%_clam_stubbed.bc $(PATCH_PLUGIN)
-	$(OPT) -load-pass-plugin=./$(PATCH_PLUGIN) -passes=$(PATCH_NAME) $< -o $@
+	VERIFIED_IDS="$$(python3 extract_safe_ids.py $(DIR)/$*_clam.bc.log)" \
+	$(OPT) -load-pass-plugin=./$(PATCH_PLUGIN) -passes=$(PATCH_NAME) \
+	$< -o $@
 
 # Run another optimizer pass
 $(DIR)/%_clam_optimized.bc: $(DIR)/%_clam_patched.bc $(PATCH_PLUGIN)
