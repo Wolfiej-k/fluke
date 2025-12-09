@@ -6,11 +6,7 @@ CFLAGS=-fPIC -Wall -Wextra
 LDFLAGS=-shared -Wl,-z,now
 
 CLAM=clam/py/clam.py
-CLAM_FLAGS=--crab-track=mem --crab-dom=zones --crab-check=assert --crab-inter \
-		   --crab-promote-assume --crab-opt=dce --crab-opt=add-invariants \
-		   --crab-opt-invariants-loc=block-entry \
-		   --crab-opt-invariants-loc=loop-header \
-		   --crab-opt-invariants-loc=after-load
+CLAM_FLAGS=--crab-track=mem --crab-dom=int --crab-check=assert --crab-inter
 
 PASS_NAME=bounds-check
 PASS_PLUGIN=bounds_check.so
