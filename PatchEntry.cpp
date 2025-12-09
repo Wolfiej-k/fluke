@@ -1,10 +1,15 @@
-#include "llvm/IR/DerivedTypes.h"
+#include "llvm/IR/Function.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Instructions.h"
+#include "llvm/IR/IntrinsicInst.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Passes/PassBuilder.h"
 #include "llvm/Passes/PassPlugin.h"
 #include "llvm/Support/raw_ostream.h"
+#include <cstdlib> // Required for getenv
+#include <set>
+#include <sstream>
+#include <vector>
 
 using namespace llvm;
 
@@ -15,7 +20,55 @@ public:
   PreservedAnalyses run(Module &M, ModuleAnalysisManager &) {
     LLVMContext &Ctx = M.getContext();
 
-    // Resets entry function to public after clam
+    // Promote verified assertions to llvm.assume
+    std::set<int> SafeSet;
+    const char *EnvStr = std::getenv("VERIFIED_IDS");
+    bool HasVerifiedIDs = (EnvStr != nullptr && EnvStr[0] != '\0');
+    if (HasVerifiedIDs) {
+      std::stringstream SS(EnvStr);
+      std::string Segment;
+      while (std::getline(SS, Segment, ',')) {
+        if (!Segment.empty()) {
+          SafeSet.insert(std::stoi(Segment));
+        }
+      }
+    }
+
+    Function *CrabAssert = M.getFunction("__CRAB_assert");
+    Function *LlvmAssume = Intrinsic::getDeclaration(&M, Intrinsic::assume);
+
+    int CheckCounter = 0;
+    std::vector<CallInst *> ToPromote;
+
+    for (Function &F : M) {
+      for (BasicBlock &BB : F) {
+        for (Instruction &I : BB) {
+          if (auto *CI = dyn_cast<CallInst>(&I)) {
+            if (CI->getCalledFunction() == CrabAssert) {
+              CheckCounter++;
+              if (HasVerifiedIDs && SafeSet.count(CheckCounter)) {
+                ToPromote.push_back(CI);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    for (CallInst *CI : ToPromote) {
+      IRBuilder<> B(CI);
+      Value *Cond = CI->getArgOperand(0);
+      if (Cond->getType()->isIntegerTy(32)) {
+        Cond = B.CreateICmpNE(Cond, B.getInt32(0));
+      } else if (Cond->getType()->isIntegerTy(8)) {
+        Cond = B.CreateICmpNE(Cond, B.getInt8(0));
+      }
+
+      B.CreateCall(LlvmAssume, {Cond});
+      CI->eraseFromParent();
+    }
+
+    // Reset entry function visibility
     Function *EntryFn = M.getFunction("entry");
     if (EntryFn && !EntryFn->isDeclaration()) {
       EntryFn->setLinkage(GlobalValue::ExternalLinkage);
