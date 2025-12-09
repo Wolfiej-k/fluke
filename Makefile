@@ -6,7 +6,11 @@ CFLAGS=-fPIC -Wall -Wextra
 LDFLAGS=-shared -Wl,-z,now
 
 CLAM=clam/py/clam.py
-CLAM_FLAGS=--crab-track=mem --crab-dom=int --crab-check=assert --crab-opt=dce --crab-promote-assume --crab-inter
+CLAM_FLAGS=--crab-track=mem --crab-dom=int --crab-check=assert --crab-opt=dce \
+		   --crab-opt=add-invariants --crab-promote-assume --crab-inter \
+		   --crab-opt-invariants-loc=block-entry \
+		   --crab-opt-invariants-loc=loop-header \
+		   --crab-opt-invariants-loc=after-load
 
 PASS_NAME=bounds-check
 PASS_PLUGIN=bounds_check.so
@@ -79,8 +83,12 @@ $(DIR)/%_checked.bc: $(DIR)/%_checked.ll
 $(DIR)/%_linked.bc: $(DIR)/%_checked.bc $(RUNTIME:.c=.bc)
 	$(LINK) $(RUNTIME:.c=.bc) $< -o $@
 
+# Inline bounds check functions
+$(DIR)/%_inlined.bc: $(DIR)/%_linked.bc
+	$(OPT) -passes=always-inline $< -o $@
+
 # Replace crab intrinsics with stubs
-$(DIR)/%_lib_stubbed.bc: $(DIR)/%_linked.bc $(STUBS:.c=.bc)
+$(DIR)/%_lib_stubbed.bc: $(DIR)/%_inlined.bc $(STUBS:.c=.bc)
 	$(LINK) $^ -o $@
 
 # Run another optimizer pass
@@ -91,8 +99,8 @@ $(DIR)/%_lib_optimized.bc: $(DIR)/%_lib_stubbed.bc $(PATCH_PLUGIN)
 $(DIR)/%_lib.so: $(DIR)/%_lib_optimized.bc
 	$(CLANG) -O3 $(CFLAGS) $(LDFLAGS) $< -o $@
 
-# Run clam on linked bitcode
-$(DIR)/%_clam.bc: $(DIR)/%_linked.bc
+# Run clam on inlined bitcode
+$(DIR)/%_clam.bc: $(DIR)/%_inlined.bc
 	$(CLAM) $(CLAM_FLAGS) $< -o $@ > $@.log 2>&1
 	@./print_failures.sh $@.log
 
