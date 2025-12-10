@@ -6,7 +6,7 @@ CFLAGS=-fPIC -Wall -Wextra
 LDFLAGS=-shared -Wl,-z,now
 
 CLAM=clam/py/clam.py
-CLAM_FLAGS=--crab-track=mem --crab-dom=term-dis-int --crab-check=assert --crab-inter
+CLAM_FLAGS=--crab-track=mem --crab-dom=zones --crab-check=assert --crab-inter
 
 PASS_NAME=bounds-check
 PASS_PLUGIN=bounds_check.so
@@ -59,7 +59,7 @@ $(RUNTIME:.c=.bc): $(RUNTIME)
 $(STUBS:.c=.bc): $(STUBS)
 	$(CLANG) -O3 $(CFLAGS) -emit-llvm -c $< -o $@
 
-# Compile to executable without bounds checks
+# # Compile to executable without bounds checks
 $(DIR)/%_exec: $(DIR)/%.c
 	$(CLANG) -O3 $(CFLAGS) $^ -o $@ -lm
 
