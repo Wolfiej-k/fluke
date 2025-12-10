@@ -10,6 +10,12 @@ using namespace llvm;
 
 namespace {
 
+struct CheckedPtrSet {
+  SmallPtrSet<Value *, 16> Seen;
+  bool contains(Value *V) const { return Seen.count(V); }
+  void insert(Value *V) { Seen.insert(V); }
+};
+
 class BoundsCheckPass : public PassInfoMixin<BoundsCheckPass> {
 public:
   PreservedAnalyses run(Module &M, ModuleAnalysisManager &) {
@@ -21,19 +27,19 @@ public:
     // Runtime function for bounds checking
     FunctionCallee BoundsCheckFn = M.getOrInsertFunction(
         "__bounds_check",
-        FunctionType::get(Type::getVoidTy(Ctx), {I8PtrTy, Int64Ty}, false));
+        FunctionType::get(I8PtrTy, {I8PtrTy, Int64Ty}, false));
 
     // Runtime function for bounds assumptions
     FunctionCallee BoundsAssumeFn = M.getOrInsertFunction(
         "__bounds_assume",
         FunctionType::get(Type::getVoidTy(Ctx), {I8PtrTy, Int64Ty}, false));
 
-    // Annotate assumptions in entry function
+    // Annotate assumptions in entry
     Function *EntryFn = M.getFunction("entry");
     if (EntryFn && !EntryFn->isDeclaration()) {
       BasicBlock &EntryBB = EntryFn->getEntryBlock();
       IRBuilder<> B(&*EntryBB.getFirstInsertionPt());
-      instrumentGlobalsAndFunctions(M, B, BoundsAssumeFn);
+      instrumentGlobals(M, B, BoundsAssumeFn);
     }
 
     for (Function &F : M) {
@@ -42,30 +48,33 @@ public:
       }
 
       for (BasicBlock &BB : F) {
+        // Don't instrument the same pointer more than once
+        CheckedPtrSet BlockSeen;
+
         for (auto Inst = BB.begin(); Inst != BB.end(); ++Inst) {
           Instruction &I = *Inst;
           IRBuilder<> B(&I);
 
           // Annotate memory accesses
           if (auto *LI = dyn_cast<LoadInst>(&I)) {
-            instrumentPointer(B, LI->getPointerOperand(),
-                              getTypeStoreSize(M, LI->getType()),
-                              BoundsCheckFn);
+            instrumentPointer(B, LI, LI->getPointerOperand(),
+                              getTypeStoreSize(M, LI->getType()), BoundsCheckFn,
+                              BlockSeen, DL);
           } else if (auto *SI = dyn_cast<StoreInst>(&I)) {
             instrumentPointer(
-                B, SI->getPointerOperand(),
+                B, SI, SI->getPointerOperand(),
                 getTypeStoreSize(M, SI->getValueOperand()->getType()),
-                BoundsCheckFn);
+                BoundsCheckFn, BlockSeen, DL);
           } else if (auto *AMW = dyn_cast<AtomicRMWInst>(&I)) {
             instrumentPointer(
-                B, AMW->getPointerOperand(),
+                B, AMW, AMW->getPointerOperand(),
                 getTypeStoreSize(M, AMW->getValOperand()->getType()),
-                BoundsCheckFn);
+                BoundsCheckFn, BlockSeen, DL);
           } else if (auto *CX = dyn_cast<AtomicCmpXchgInst>(&I)) {
             instrumentPointer(
-                B, CX->getPointerOperand(),
+                B, CX, CX->getPointerOperand(),
                 getTypeStoreSize(M, CX->getNewValOperand()->getType()),
-                BoundsCheckFn);
+                BoundsCheckFn, BlockSeen, DL);
           }
 
           // Assume stack allocations are safe
@@ -97,7 +106,6 @@ public:
               B.SetInsertPoint(I.getNextNode());
 
               Value *SizeVal = ConstantInt::get(Int64Ty, 0);
-
               if (IsCalloc && Call->arg_size() >= 2) {
                 Value *Count =
                     B.CreateZExtOrTrunc(Call->getArgOperand(0), Int64Ty);
@@ -134,33 +142,76 @@ private:
                       B.CreateZExtOrTrunc(Size, Int64Ty)});
   }
 
-  static void instrumentPointer(IRBuilder<> &B, Value *Ptr, uint64_t Size,
-                                FunctionCallee &Fn) {
+  static bool isTriviallySafe(Value *Ptr, uint64_t AccessSize,
+                              const DataLayout &DL) {
+    Value *Stripped = Ptr->stripPointerCasts();
+    if (auto *AI = dyn_cast<AllocaInst>(Stripped)) {
+      if (AI->isArrayAllocation()) {
+        return false;
+      }
+
+      uint64_t AllocSize = DL.getTypeAllocSize(AI->getAllocatedType());
+      return AccessSize <= AllocSize;
+    }
+
+    if (auto *GV = dyn_cast<GlobalVariable>(Stripped)) {
+      if (!GV->hasInitializer() && GV->hasExternalLinkage()) {
+        return false;
+      }
+
+      uint64_t AllocSize = DL.getTypeAllocSize(GV->getValueType());
+      return AccessSize <= AllocSize;
+    }
+
+    return false;
+  }
+
+  static void instrumentPointer(IRBuilder<> &B, Instruction *MemInst,
+                                Value *Ptr, uint64_t Size, FunctionCallee &Fn,
+                                CheckedPtrSet &BlockSeen,
+                                const DataLayout &DL) {
+    if (Size == 0 || BlockSeen.contains(Ptr) ||
+        isTriviallySafe(Ptr, Size, DL)) {
+      return;
+    }
+
     LLVMContext &Ctx = B.getContext();
-    if (Size > 0) {
-      injectCall(B, Fn, Ptr, ConstantInt::get(Type::getInt64Ty(Ctx), Size));
+    BlockSeen.insert(Ptr);
+
+    PointerType *I8PtrTy = PointerType::getUnqual(Type::getInt8Ty(Ctx));
+    Type *Int64Ty = Type::getInt64Ty(Ctx);
+
+    Value *VoidPtr = B.CreatePointerCast(Ptr, I8PtrTy);
+    Value *SizeVal = ConstantInt::get(Int64Ty, Size);
+    CallInst *MaskedVoidPtr = B.CreateCall(Fn, {VoidPtr, SizeVal});
+    Value *MaskedTypedPtr = B.CreatePointerCast(MaskedVoidPtr, Ptr->getType());
+
+    if (auto *LI = dyn_cast<LoadInst>(MemInst)) {
+      LI->setOperand(LI->getPointerOperandIndex(), MaskedTypedPtr);
+    } else if (auto *SI = dyn_cast<StoreInst>(MemInst)) {
+      SI->setOperand(SI->getPointerOperandIndex(), MaskedTypedPtr);
+    } else if (auto *AMW = dyn_cast<AtomicRMWInst>(MemInst)) {
+      AMW->setOperand(AMW->getPointerOperandIndex(), MaskedTypedPtr);
+    } else if (auto *CX = dyn_cast<AtomicCmpXchgInst>(MemInst)) {
+      CX->setOperand(CX->getPointerOperandIndex(), MaskedTypedPtr);
     }
   }
 
-  static void instrumentGlobalsAndFunctions(Module &M, IRBuilder<> &B,
-                                            FunctionCallee &AssumeFn) {
+  static void instrumentGlobals(Module &M, IRBuilder<> &B,
+                                FunctionCallee &AssumeFn) {
     LLVMContext &Ctx = M.getContext();
     const DataLayout &DL = M.getDataLayout();
 
     for (GlobalVariable &G : M.globals()) {
-      if (G.getName().startswith("llvm."))
+      if (G.getName().startswith("llvm.")) {
         continue;
+      }
+
       uint64_t Size = DL.getTypeAllocSize(G.getValueType());
       if (Size > 0) {
         injectCall(B, AssumeFn, &G,
                    ConstantInt::get(Type::getInt64Ty(Ctx), Size));
       }
-    }
-
-    for (Function &F : M) {
-      if (F.isDeclaration() || F.getName().startswith("llvm."))
-        continue;
-      injectCall(B, AssumeFn, &F, ConstantInt::get(Type::getInt64Ty(Ctx), 1));
     }
   }
 };

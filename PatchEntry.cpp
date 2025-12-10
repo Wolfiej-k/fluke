@@ -23,7 +23,7 @@ public:
     // Promote verified assertions to llvm.assume
     std::set<int> SafeSet;
     const char *EnvStr = std::getenv("VERIFIED_IDS");
-    bool HasVerifiedIDs = (EnvStr != nullptr && EnvStr[0] != '\0');
+    bool HasVerifiedIDs = (EnvStr && EnvStr[0] != '\0');
     if (HasVerifiedIDs) {
       std::stringstream SS(EnvStr);
       std::string Segment;
@@ -73,7 +73,6 @@ public:
     if (EntryFn && !EntryFn->isDeclaration()) {
       EntryFn->setLinkage(GlobalValue::ExternalLinkage);
       EntryFn->setVisibility(GlobalValue::DefaultVisibility);
-      EntryFn->removeFnAttr(Attribute::OptimizeNone);
     }
 
     return PreservedAnalyses::none();
