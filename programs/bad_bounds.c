@@ -1,6 +1,6 @@
 #include <stdio.h>
 
-void entry() {
+__attribute__((noinline)) void entry() {
     int val = *(int *)1000;
     printf("val: %d\n", val);
 }

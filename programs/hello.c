@@ -1,6 +1,6 @@
 #include <stdio.h>
 
-void entry() {
+__attribute__((noinline)) void entry() {
     printf("Hello, World!\n");
 }
 

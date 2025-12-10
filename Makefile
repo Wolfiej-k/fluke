@@ -6,7 +6,7 @@ CFLAGS=-fPIC -Wall -Wextra
 LDFLAGS=-shared -Wl,-z,now
 
 CLAM=clam/py/clam.py
-CLAM_FLAGS=--crab-track=mem --crab-dom=int --crab-check=assert --crab-inter
+CLAM_FLAGS=--crab-track=mem --crab-dom=term-dis-int --crab-check=assert --crab-inter
 
 PASS_NAME=bounds-check
 PASS_PLUGIN=bounds_check.so
@@ -28,7 +28,7 @@ STUBS=stubs.c
 
 LOADER=./loader/target/release/fixed_loader
 
-.PHONY: all clean run pass loader clam
+.PHONY: all clean clean-all run pass loader clam
 .SECONDARY:
 
 all: pass $(TARGET_EXEC) $(TARGET_LIB) $(TARGET_CLAM)
@@ -65,7 +65,7 @@ $(DIR)/%_exec: $(DIR)/%.c
 
 # Compile to LLVM IR
 $(DIR)/%.ll: $(DIR)/%.c
-	$(CLANG) $(CFLAGS) -S -emit-llvm $< -o $@
+	$(CLANG) -O3 $(CFLAGS) -Xclang -disable-O0-optnone -S -emit-llvm $< -o $@
 
 # Run bounds check pass
 $(DIR)/%_checked.ll: $(DIR)/%.ll $(PASS_PLUGIN)
@@ -149,4 +149,7 @@ run: all
 	done
 
 clean:
-	rm -f $(DIR)/*_exec $(DIR)/*.so $(DIR)/*.ll $(DIR)/*.bc $(DIR)/*.bc.log *.o $(RUNTIME:.c=.bc) $(STUBS:.c=.bc) *.so
+	rm -f $(DIR)/*_exec $(DIR)/*.so $(DIR)/*.ll $(DIR)/*.bc $(DIR)/*.bc.log *.csv
+
+clean-all: clean
+	rm -f $(RUNTIME:.c=.bc) $(STUBS:.c=.bc) *.so *.o

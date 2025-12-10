@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <unistd.h>
 
-void entry() {
+__attribute__((noinline)) void entry() {
     sleep(1);
     printf("hello!\n");
 }

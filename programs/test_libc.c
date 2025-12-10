@@ -3,6 +3,7 @@
 #include <math.h>
 #include <time.h>
 
+__attribute__((noinline))
 void entry(void) {
     printf("test_libc: starting\n");
     

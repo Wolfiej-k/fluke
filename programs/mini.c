@@ -4,7 +4,7 @@ int x = 42;
 int y = 67;
 
 __attribute__((visibility("default")))
-void entry() {
+__attribute__((noinline)) void entry() {
     int bad = 0;
     if (x + y == 109) {
         x = 67;

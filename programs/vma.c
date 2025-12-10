@@ -2,7 +2,7 @@
 #include <unistd.h>
 
 __attribute__((visibility("default")))
-void entry() {
+__attribute__((noinline)) void entry() {
     FILE *maps = fopen("/proc/self/maps", "r");
     if (!maps) {
         perror("fopen");
